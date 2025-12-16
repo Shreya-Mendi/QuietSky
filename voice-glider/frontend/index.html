@@ -18,13 +18,53 @@
           sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        background: #0a0e27;
-        color: #fff;
+        background: #0f1923;
+        color: #ece8e1;
         overflow-x: hidden;
       }
 
       #root {
         min-height: 100vh;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.1);
+        }
+      }
+
+      @keyframes glow {
+        0%, 100% {
+          box-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }
+        50% {
+          box-shadow: 0 0 40px rgba(0, 217, 255, 0.8);
+        }
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: -1000px 0;
+        }
+        100% {
+          background-position: 1000px 0;
+        }
       }
     </style>
   </head>
