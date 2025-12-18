@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/user/QuietSky/voice-glider/backend/app.py", line 1, in <module>
+    from fastapi import FastAPI, File, UploadFile, Form
+ModuleNotFoundError: No module named 'fastapi'

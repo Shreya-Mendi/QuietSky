@@ -222,8 +222,11 @@ const RocketFlight = () => {
       ctx.shadowBlur = 0;
 
       // ROCKET - positioned based on height (rises when fuel increases)
-      const rocketX = width / 2;
-      const rocketBaseY = platformY - rocketHeight; // This makes it rise!
+      // Add shake effect while recording for live feedback!
+      const shakeX = isRecording ? (Math.random() - 0.5) * audioLevel * 12 : 0;
+      const shakeY = isRecording ? (Math.random() - 0.5) * audioLevel * 8 : 0;
+      const rocketX = width / 2 + shakeX;
+      const rocketBaseY = platformY - rocketHeight + shakeY; // This makes it rise!
       const rocketY = rocketBaseY - 60;
 
       // Rocket exhaust (MUCH MORE DRAMATIC when recording or has fuel)
@@ -401,12 +404,39 @@ const RocketFlight = () => {
 
   return (
     <div style={styles.container}>
+      {/* Instruction Overlay - Always Visible */}
+      <div style={styles.instructionOverlay}>
+        <p style={styles.instructionTitle}>🎯 HOW TO PLAY</p>
+        <p style={styles.instructionText}>
+          Say smooth, long sounds like <strong>"Aaaaaaah"</strong> or <strong>"Ooooooh"</strong>
+        </p>
+        <p style={styles.instructionExample}>The smoother and longer you speak, the more fuel you get!</p>
+      </div>
+
       <div style={styles.header}>
         <h1 style={styles.title}>🚀 Space Flight Training</h1>
         <p style={styles.subtitle}>Smooth Voice Control</p>
       </div>
 
       <canvas ref={canvasRef} width={1200} height={800} style={styles.canvas} />
+
+      {/* Live Audio Meter During Recording */}
+      {isRecording && (
+        <div style={styles.liveMeter}>
+          <p style={styles.liveLabel}>🔴 SPEAKING</p>
+          <div style={styles.meterBar}>
+            <div style={{...styles.meterFill, width: `${audioLevel * 100}%`}} />
+          </div>
+          <p style={styles.liveHint}>Keep going... (stops on silence)</p>
+        </div>
+      )}
+
+      {/* Debug Display */}
+      <div style={styles.debugBox}>
+        <p style={styles.debugText}>Fuel: {(rocketFuel * 100).toFixed(0)}%</p>
+        <p style={styles.debugText}>Height: {Math.round(rocketHeight)}m</p>
+        {features && <p style={styles.debugText}>Flow: {(features.continuity * 100).toFixed(0)}%</p>}
+      </div>
 
       <div style={styles.controls}>
         <div style={styles.promptBox}>
@@ -488,15 +518,102 @@ const styles = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
+    alignments: 'center',
     padding: '2rem',
     minHeight: '100vh',
     background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    position: 'relative',
+  },
+  instructionOverlay: {
+    position: 'absolute',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(0, 0, 0, 0.9)',
+    padding: '1rem 2rem',
+    borderRadius: '12px',
+    border: '2px solid #fbbf24',
+    boxShadow: '0 4px 20px rgba(251, 191, 36, 0.4)',
+    zIndex: 1000,
+    maxWidth: '600px',
+  },
+  instructionTitle: {
+    color: '#fbbf24',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    marginBottom: '0.5rem',
+    textAlign: 'center',
+  },
+  instructionText: {
+    color: '#fff',
+    fontSize: '0.95rem',
+    marginBottom: '0.3rem',
+    textAlign: 'center',
+  },
+  instructionExample: {
+    color: '#4ade80',
+    fontSize: '0.85rem',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  liveMeter: {
+    position: 'absolute',
+    top: '120px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(0, 0, 0, 0.85)',
+    padding: '1rem 2rem',
+    borderRadius: '10px',
+    border: '2px solid #22c55e',
+    minWidth: '300px',
+    zIndex: 1000,
+  },
+  liveLabel: {
+    color: '#22c55e',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: '0.5rem',
+  },
+  meterBar: {
+    width: '100%',
+    height: '20px',
+    background: '#1e293b',
+    borderRadius: '10px',
+    overflow: 'hidden',
+    marginBottom: '0.5rem',
+  },
+  meterFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+    transition: 'width 0.1s ease',
+  },
+  liveHint: {
+    color: '#94a3b8',
+    fontSize: '0.85rem',
+    textAlign: 'center',
+  },
+  debugBox: {
+    position: 'absolute',
+    bottom: '20px',
+    right: '20px',
+    background: 'rgba(0, 0, 0, 0.8)',
+    padding: '0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #475569',
+    minWidth: '150px',
+  },
+  debugText: {
+    color: '#cbd5e1',
+    fontSize: '0.8rem',
+    margin: '0.2rem 0',
+    fontFamily: 'monospace',
   },
   header: {
     textAlign: 'center',
     marginBottom: '1.5rem',
+    marginTop: '5rem',
   },
   title: {
     fontSize: '3rem',

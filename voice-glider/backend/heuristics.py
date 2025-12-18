@@ -34,8 +34,11 @@ def analyze_rocket_flight(audio, sr=16000, transcript=""):
     else:
         feedback = "Engines warming up! Keep going!"
 
-    # Game events for rocket
-    rocket_fuel = min(1.0, (continuity + stability) / 2)
+    # Game events for rocket - BOOSTED for visibility
+    # Ensure minimum 0.3 fuel even for basic input
+    rocket_fuel = min(1.0, max(0.3, (continuity + stability) / 1.5))
+
+    print(f"[ROCKET] Continuity: {continuity:.3f}, Stability: {stability:.3f}, Fuel: {rocket_fuel:.3f}")
 
     game_events = {
         "rocketFuel": round(rocket_fuel, 3),
@@ -75,12 +78,17 @@ def analyze_monster_echo(audio, sr=16000, transcript=""):
     else:
         feedback = "Good effort! Keep the rhythm!"
 
-    # Game events
+    # Game events - BOOSTED damage for visibility
     combo_multiplier = min(3, repetition_count + 1)
     mantra_strike = avg_pause_duration > 0.3 and continuity > 0.6
 
+    # Minimum 0.2 damage, up to 0.5 per hit
+    damage = max(0.2, min(0.5, combo_multiplier * 0.2 + 0.1))
+
+    print(f"[MONSTER] Reps: {repetition_count}, Combo: {combo_multiplier}, Damage: {damage:.3f}")
+
     game_events = {
-        "monsterDamage": combo_multiplier * 0.3,
+        "monsterDamage": round(damage, 3),
         "comboMultiplier": combo_multiplier,
         "mantraStrike": mantra_strike,
         "criticalHit": repetition_count >= 2 and onset_smoothness > 0.7
@@ -120,14 +128,17 @@ def analyze_echo_bird(audio, sr=16000, transcript=""):
     else:
         feedback = "Keep flapping! You're doing great!"
 
-    # Game events
+    # Game events - BOOSTED lift for visibility
     # Short sounds = small flaps, long sounds = glides
+    # Increased lift values for better visual feedback
     if avg_vowel_duration > 0.4:
-        bird_lift = 3  # Long glide
+        bird_lift = 5  # Long glide (was 3)
     elif avg_vowel_duration > 0.2:
-        bird_lift = 2  # Medium
+        bird_lift = 3  # Medium (was 2)
     else:
-        bird_lift = 1  # Small flap
+        bird_lift = 2  # Small flap (was 1)
+
+    print(f"[BIRD] Vowel dur: {avg_vowel_duration:.3f}, Rhythm: {rhythm_score:.3f}, Lift: {bird_lift}")
 
     game_events = {
         "birdLift": bird_lift,
@@ -169,10 +180,20 @@ def analyze_treasure_talk(audio, sr=16000, transcript=""):
     else:
         feedback = "The landscape responds to your voice..."
 
-    # Game events
+    # Game events - BOOSTED progression for visibility
+    # More generous progression: 0.15 per word instead of 0.1
+    # Minimum 0.1 progression even with no words (for any sound)
+    base_progression = max(0.1, min(1.0, word_count / 6))  # Was word_count / 10
+
+    # Boost for continuity
+    continuity_bonus = continuity * 0.1
+    total_progression = min(0.25, base_progression + continuity_bonus)  # Max 0.25 per turn
+
+    print(f"[TREASURE] Words: {word_count}, Continuity: {continuity:.3f}, Progression: {total_progression:.3f}")
+
     game_events = {
         "pathOpened": continuity > 0.5,
-        "sceneProgression": min(1.0, word_count / 10),
+        "sceneProgression": round(total_progression, 3),
         "naturalPacing": 80 <= words_per_minute <= 180,
         "expressiveness": round(continuity, 3)
     }
