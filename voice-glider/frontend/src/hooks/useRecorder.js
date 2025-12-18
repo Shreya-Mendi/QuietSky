@@ -12,8 +12,8 @@ export const useRecorder = (onSilenceDetected) => {
   const silenceTimerRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  // Silence detection parameters
-  const SILENCE_THRESHOLD = 0.02;
+  // Silence detection parameters - LOWERED for sensitivity
+  const SILENCE_THRESHOLD = 0.01; // Even quieter detection (was 0.02)
   const SILENCE_DURATION = 2500; // 2.5 seconds of silence
 
   const analyzeAudioLevel = useCallback(() => {
@@ -31,7 +31,9 @@ export const useRecorder = (onSilenceDetected) => {
     }
     const rms = Math.sqrt(sum / bufferLength);
 
-    setAudioLevel(rms);
+    // Amplify the audio level for better visual feedback (especially for quiet voices)
+    const amplified = Math.min(1.0, rms * 3); // 3x amplification
+    setAudioLevel(amplified);
 
     // Silence detection
     if (isRecording) {

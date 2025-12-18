@@ -424,10 +424,11 @@ const RocketFlight = () => {
       {isRecording && (
         <div style={styles.liveMeter}>
           <p style={styles.liveLabel}>🔴 SPEAKING</p>
+          <p style={styles.capturingText}>Capturing your voice...</p>
           <div style={styles.meterBar}>
             <div style={{...styles.meterFill, width: `${audioLevel * 100}%`}} />
           </div>
-          <p style={styles.liveHint}>Keep going... (stops on silence)</p>
+          <p style={styles.liveHint}>Volume: {Math.round(audioLevel * 100)}% • Keep going...</p>
         </div>
       )}
 
@@ -574,7 +575,14 @@ const styles = {
     fontSize: '1rem',
     fontWeight: 'bold',
     textAlign: 'center',
+    marginBottom: '0.3rem',
+  },
+  capturingText: {
+    color: '#fbbf24',
+    fontSize: '0.9rem',
+    textAlign: 'center',
     marginBottom: '0.5rem',
+    fontStyle: 'italic',
   },
   meterBar: {
     width: '100%',
