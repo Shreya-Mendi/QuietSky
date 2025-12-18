@@ -6,143 +6,122 @@ const RocketFlight = () => {
   const [gameState, setGameState] = useState('ready');
   const [feedback, setFeedback] = useState('');
   const [rocketFuel, setRocketFuel] = useState(0);
+  const [rocketHeight, setRocketHeight] = useState(0); // Actual visual height
   const [transcript, setTranscript] = useState('');
-  const [liveText, setLiveText] = useState('');
-  const [liveTranscript, setLiveTranscript] = useState('');
   const [features, setFeatures] = useState(null);
-  const [successAnim, setSuccessAnim] = useState(false);
-  const [buttonHovered, setButtonHovered] = useState(false);
+  const [stars, setStars] = useState([]);
+  const [clouds, setClouds] = useState([]);
+  const [planets, setPlanets] = useState([]);
 
   const canvasRef = useRef(null);
-  const particlesRef = useRef([]);
-  const animationFrameRef = useRef(null);
-  const recognitionRef = useRef(null);
+  const animationRef = useRef(null);
 
   const handleSilenceDetected = async () => {
-    // Stop live recognition
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-
     const audioBlob = await stopRecording();
     if (audioBlob) {
-      console.log('=== Audio Blob Details ===');
-      console.log('Audio blob size:', audioBlob.size);
-      console.log('Audio blob type:', audioBlob.type);
-
       setGameState('analyzing');
-      setLiveText('PROCESSING VOICE DATA...');
       try {
-        console.log('Sending audio to backend...');
         const result = await analyzeAudio(audioBlob, 'rocket');
-        console.log('=== API Response ===');
-        console.log('Full result:', result);
+        console.log('=== ROCKET RESPONSE ===');
+        console.log('Fuel:', result.gameEvents?.rocketFuel);
         console.log('Transcript:', result.transcript);
-        console.log('Features:', result.features);
-        console.log('Feedback:', result.feedback);
-        console.log('Game Events:', result.gameEvents);
-        console.log('Rocket Fuel:', result.gameEvents?.rocketFuel);
 
         setTranscript(result.transcript);
         setFeatures(result.features);
         setFeedback(result.feedback);
 
-        const fuelValue = result.gameEvents?.rocketFuel || 0;
-        console.log('Setting rocket fuel to:', fuelValue);
-        setRocketFuel(fuelValue);
+        const newFuel = result.gameEvents?.rocketFuel || 0;
+        console.log('Setting rocket fuel to:', newFuel);
+        setRocketFuel(newFuel);
 
-        setSuccessAnim(true);
-        setTimeout(() => setSuccessAnim(false), 1000);
+        // Animate rocket rising based on fuel
+        const targetHeight = newFuel * 500; // Rocket rises up to 500px
+        console.log('Rocket will rise to:', targetHeight);
+        animateRocketRise(targetHeight);
+
         setGameState('result');
-        setLiveText('');
       } catch (error) {
-        console.error('=== Analysis Error ===');
-        console.error('Error type:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error);
-        console.error('Error response:', error.response);
-        console.error('Error response data:', error.response?.data);
-        console.error('Error response status:', error.response?.status);
-        setFeedback('CONNECTION ERROR // TRY AGAIN');
+        console.error('Analysis error:', error);
+        setFeedback('Connection error. Check backend!');
         setGameState('ready');
-        setLiveText('');
       }
-    } else {
-      console.error('=== No Audio Blob ===');
-      console.error('stopRecording() returned null or undefined');
     }
   };
 
-  const { isRecording, audioLevel, startRecording, stopRecording } = useRecorder(handleSilenceDetected);
+  const animateRocketRise = (targetHeight) => {
+    const startHeight = rocketHeight;
+    const duration = 1500; // 1.5 seconds
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function for smooth animation
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const currentHeight = startHeight + (targetHeight - startHeight) * eased;
+
+      setRocketHeight(currentHeight);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    animate();
+  };
+
+  const { isRecording, audioLevel, startRecording, stopRecording} = useRecorder(handleSilenceDetected);
 
   const handleStart = () => {
     setGameState('recording');
     setFeedback('');
     setTranscript('');
-    setRocketFuel(0);
-    setLiveTranscript('');
-    setLiveText('VOICE INPUT ACTIVE...');
     startRecording();
-
-    // Start live speech recognition
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        setLiveTranscript((prev) => {
-          const updated = prev + finalTranscript;
-          return updated || interimTranscript;
-        });
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-    }
   };
 
   const handleNextRound = () => {
     setGameState('ready');
     setFeedback('');
     setTranscript('');
-    setLiveText('');
-    setRocketFuel(0); // Reset fuel
   };
 
-  // Test backend connectivity
-  const testBackend = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/');
-      const data = await response.json();
-      console.log('Backend test successful:', data);
-      alert('Backend is connected! ' + JSON.stringify(data));
-    } catch (error) {
-      console.error('Backend test failed:', error);
-      alert('Backend connection failed! Check if backend is running on port 8000');
+  // Initialize parallax elements
+  useEffect(() => {
+    // Stars
+    const newStars = [];
+    for (let i = 0; i < 200; i++) {
+      newStars.push({
+        x: Math.random() * 1200,
+        y: Math.random() * 800,
+        size: Math.random() * 2 + 0.5,
+        speed: Math.random() * 0.3 + 0.1,
+        opacity: Math.random() * 0.5 + 0.5,
+      });
     }
-  };
+    setStars(newStars);
 
-  // Animated canvas with particles
+    // Clouds
+    const newClouds = [];
+    for (let i = 0; i < 8; i++) {
+      newClouds.push({
+        x: Math.random() * 1200,
+        y: Math.random() * 600 + 100,
+        width: Math.random() * 150 + 100,
+        height: Math.random() * 60 + 40,
+        speed: Math.random() * 0.2 + 0.1,
+      });
+    }
+    setClouds(newClouds);
+
+    // Planets in background
+    setPlanets([
+      { x: 900, y: 150, size: 120, color: '#4a5568', rings: false },
+      { x: 200, y: 80, size: 60, color: '#ed8936', rings: true },
+    ]);
+  }, []);
+
+  // Canvas animation loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -151,380 +130,356 @@ const RocketFlight = () => {
     const width = canvas.width;
     const height = canvas.height;
 
-    // Initialize particles
-    if (particlesRef.current.length === 0) {
-      for (let i = 0; i < 100; i++) {
-        particlesRef.current.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.5) * 0.5,
-          vy: (Math.random() - 0.5) * 0.5,
-          size: Math.random() * 2 + 1,
-        });
-      }
-    }
-
-    const animate = () => {
-      // Valorant-style dark tactical background
-      ctx.fillStyle = '#0a0f16';
+    const draw = () => {
+      // Deep space gradient background
+      const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+      bgGradient.addColorStop(0, '#000428');
+      bgGradient.addColorStop(0.5, '#004e92');
+      bgGradient.addColorStop(1, '#000428');
+      ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, width, height);
 
-      // Grid lines - tactical HUD
-      ctx.strokeStyle = 'rgba(255, 70, 85, 0.1)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < width; i += 50) {
+      // Draw planets
+      planets.forEach(planet => {
+        // Planet shadow/glow
+        const planetGlow = ctx.createRadialGradient(
+          planet.x, planet.y, 0,
+          planet.x, planet.y, planet.size * 1.5
+        );
+        planetGlow.addColorStop(0, `${planet.color}80`);
+        planetGlow.addColorStop(1, 'transparent');
+        ctx.fillStyle = planetGlow;
         ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, height);
-        ctx.stroke();
-      }
-      for (let i = 0; i < height; i += 50) {
+        ctx.arc(planet.x, planet.y, planet.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Planet body
+        ctx.fillStyle = planet.color;
         ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(width, i);
-        ctx.stroke();
-      }
+        ctx.arc(planet.x, planet.y, planet.size, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Update and draw particles - Valorant style angular particles
-      particlesRef.current.forEach(p => {
-        p.x += p.vx + (isRecording ? audioLevel * 3 : 0);
-        p.y += p.vy;
+        // Planet rings
+        if (planet.rings) {
+          ctx.strokeStyle = `${planet.color}60`;
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.ellipse(planet.x, planet.y, planet.size * 1.6, planet.size * 0.3, 0.3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
-        if (p.x < 0) p.x = width;
-        if (p.x > width) p.x = 0;
-        if (p.y < 0) p.y = height;
-        if (p.y > height) p.y = 0;
-
-        const opacity = isRecording ? 0.4 + audioLevel * 0.4 : 0.2;
-
-        // Draw angular particles (small diamonds/squares)
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = `rgba(255, 70, 85, ${opacity})`;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-        ctx.restore();
+        // Craters/details
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.arc(planet.x + planet.size * 0.3, planet.y - planet.size * 0.2, planet.size * 0.2, 0, Math.PI * 2);
+        ctx.fill();
       });
 
-      // Tactical visualization - Angular design (moves up with fuel)
-      const centerX = width / 2;
-      const baseY = height / 2;
-      const rocketRise = rocketFuel * 150; // Rocket rises as fuel increases
-      const centerY = baseY - rocketRise;
-      const visualSize = 80;
+      // Animated stars (parallax effect)
+      stars.forEach((star, i) => {
+        star.y += star.speed;
+        if (star.y > height) {
+          star.y = 0;
+          star.x = Math.random() * width;
+        }
 
-      // Energy trails when active (Valorant-style)
+        const twinkle = Math.sin(Date.now() / 500 + star.x) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity * twinkle})`;
+        ctx.fillRect(star.x, star.y, star.size, star.size);
+
+        // Star glow
+        if (star.size > 1.5) {
+          ctx.fillStyle = `rgba(200, 220, 255, ${star.opacity * 0.3 * twinkle})`;
+          ctx.fillRect(star.x - 1, star.y - 1, star.size + 2, star.size + 2);
+        }
+      });
+
+      // Clouds with parallax
+      clouds.forEach(cloud => {
+        cloud.x += cloud.speed;
+        if (cloud.x > width + 200) cloud.x = -cloud.width;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.ellipse(cloud.x, cloud.y, cloud.width / 2, cloud.height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.ellipse(cloud.x + cloud.width / 3, cloud.y - cloud.height / 4, cloud.width / 3, cloud.height / 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Launch platform
+      const platformY = height - 100;
+      ctx.fillStyle = '#2d3748';
+      ctx.fillRect(width / 2 - 150, platformY, 300, 20);
+
+      // Platform glow when recording
+      if (isRecording) {
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#00d9ff';
+      }
+      ctx.fillStyle = '#4a5568';
+      ctx.fillRect(width / 2 - 140, platformY + 20, 280, 80);
+      ctx.shadowBlur = 0;
+
+      // ROCKET - positioned based on height (rises when fuel increases)
+      const rocketX = width / 2;
+      const rocketBaseY = platformY - rocketHeight; // This makes it rise!
+      const rocketY = rocketBaseY - 60;
+
+      // Rocket exhaust (MUCH MORE DRAMATIC when recording or has fuel)
       if (isRecording || rocketFuel > 0) {
-        const trailLength = 60 + audioLevel * 80;
+        const exhaustIntensity = isRecording ? audioLevel * 0.8 + 0.2 : rocketFuel;
+        const exhaustLength = 100 + exhaustIntensity * 200;
 
-        // Angular energy trails
-        for (let i = 0; i < 3; i++) {
-          const offset = (i - 1) * 25;
-          const alpha = 0.3 + audioLevel * 0.4;
+        // Main exhaust flame
+        const exhaustGradient = ctx.createLinearGradient(
+          rocketX, rocketBaseY,
+          rocketX, rocketBaseY + exhaustLength
+        );
+        exhaustGradient.addColorStop(0, `rgba(255, 200, 100, ${exhaustIntensity})`);
+        exhaustGradient.addColorStop(0.3, `rgba(255, 100, 50, ${exhaustIntensity * 0.8})`);
+        exhaustGradient.addColorStop(0.6, `rgba(100, 150, 255, ${exhaustIntensity * 0.5})`);
+        exhaustGradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
 
-          ctx.strokeStyle = `rgba(255, 70, 85, ${alpha})`;
-          ctx.lineWidth = 3;
+        ctx.fillStyle = exhaustGradient;
+        ctx.beginPath();
+        ctx.moveTo(rocketX - 25, rocketBaseY);
+        ctx.lineTo(rocketX + 25, rocketBaseY);
+        ctx.lineTo(rocketX + 15, rocketBaseY + exhaustLength);
+        ctx.lineTo(rocketX - 15, rocketBaseY + exhaustLength);
+        ctx.closePath();
+        ctx.fill();
+
+        // Exhaust particles
+        for (let i = 0; i < 15; i++) {
+          const px = rocketX + (Math.random() - 0.5) * 40;
+          const py = rocketBaseY + Math.random() * exhaustLength;
+          const pSize = Math.random() * 4 + 2;
+          const pAlpha = Math.random() * exhaustIntensity;
+
+          ctx.fillStyle = Math.random() > 0.5
+            ? `rgba(255, 150, 50, ${pAlpha})`
+            : `rgba(100, 180, 255, ${pAlpha})`;
           ctx.beginPath();
-          ctx.moveTo(centerX + offset, centerY + visualSize / 2);
-          ctx.lineTo(centerX + offset, centerY + visualSize / 2 + trailLength);
-          ctx.stroke();
-
-          // Angular accents
-          ctx.fillStyle = `rgba(255, 70, 85, ${alpha * 0.6})`;
-          for (let j = 0; j < 8; j++) {
-            const py = centerY + visualSize / 2 + (j * trailLength / 8);
-            ctx.save();
-            ctx.translate(centerX + offset, py);
-            ctx.rotate(Math.PI / 4);
-            ctx.fillRect(-2, -2, 4, 4);
-            ctx.restore();
-          }
+          ctx.arc(px, py, pSize, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
-      // Main angular shape - Valorant style hexagon/diamond
-      ctx.save();
-      ctx.translate(centerX, centerY);
+      // Rocket body with metallic gradient
+      const rocketGradient = ctx.createLinearGradient(rocketX - 30, 0, rocketX + 30, 0);
+      rocketGradient.addColorStop(0, '#cbd5e0');
+      rocketGradient.addColorStop(0.5, '#f7fafc');
+      rocketGradient.addColorStop(1, '#a0aec0');
 
-      // Outer glow when active
-      if (isRecording) {
-        ctx.shadowBlur = 25;
-        ctx.shadowColor = '#ff4655';
-      }
-
-      // Main body - angular hexagon
-      ctx.fillStyle = '#1c252e';
-      ctx.strokeStyle = '#ff4655';
-      ctx.lineWidth = 3;
+      // Main body
+      ctx.fillStyle = rocketGradient;
       ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        const x = Math.cos(angle) * visualSize / 2;
-        const y = Math.sin(angle) * visualSize / 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
+      ctx.moveTo(rocketX, rocketY - 30); // Nose
+      ctx.lineTo(rocketX - 30, rocketY + 50);
+      ctx.lineTo(rocketX + 30, rocketY + 50);
       ctx.closePath();
       ctx.fill();
+
+      // Body highlights
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rocketX - 15, rocketY - 10);
+      ctx.lineTo(rocketX - 15, rocketY + 40);
       ctx.stroke();
 
-      ctx.shadowBlur = 0;
+      // Red accent stripe
+      ctx.fillStyle = '#fc8181';
+      ctx.fillRect(rocketX - 30, rocketY + 10, 60, 8);
 
-      // Inner core - pulsing
-      const pulseSize = 20 + (isRecording ? audioLevel * 15 : 0);
-      ctx.fillStyle = isRecording ? '#ff4655' : '#7a8a99';
+      // Windows
+      ctx.fillStyle = '#4299e1';
       ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        const x = Math.cos(angle) * pulseSize;
-        const y = Math.sin(angle) * pulseSize;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
+      ctx.arc(rocketX, rocketY, 12, 0, Math.PI * 2);
       ctx.fill();
 
-      // Corner accents
-      ctx.fillStyle = '#ff4655';
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
-        const x = Math.cos(angle) * (visualSize / 2 + 5);
-        const y = Math.sin(angle) * (visualSize / 2 + 5);
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle + Math.PI / 2);
-        ctx.fillRect(-2, -6, 4, 12);
-        ctx.restore();
-      }
+      // Window reflection
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(rocketX - 3, rocketY - 3, 5, 0, Math.PI * 2);
+      ctx.fill();
 
-      ctx.restore();
+      // Fins with gradient
+      const finGradient = ctx.createLinearGradient(rocketX - 50, 0, rocketX - 30, 0);
+      finGradient.addColorStop(0, '#718096');
+      finGradient.addColorStop(1, '#a0aec0');
 
-      // Tactical HUD - Fuel/Power gauge (Valorant style)
-      const gaugeX = 40;
-      const gaugeY = height - 50;
-      const gaugeWidth = width - 80;
-      const gaugeHeight = 6;
+      ctx.fillStyle = finGradient;
+      // Left fin
+      ctx.beginPath();
+      ctx.moveTo(rocketX - 30, rocketY + 30);
+      ctx.lineTo(rocketX - 55, rocketY + 70);
+      ctx.lineTo(rocketX - 30, rocketY + 50);
+      ctx.fill();
 
-      // Gauge label
-      ctx.fillStyle = '#7a8a99';
-      ctx.font = 'bold 11px monospace';
+      // Right fin
+      ctx.beginPath();
+      ctx.moveTo(rocketX + 30, rocketY + 30);
+      ctx.lineTo(rocketX + 55, rocketY + 70);
+      ctx.lineTo(rocketX + 30, rocketY + 50);
+      ctx.fill();
+
+      // HUD Overlay - Altitude indicator (BIG and CLEAR)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(20, 20, 250, 120);
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 20, 250, 120);
+
+      ctx.fillStyle = '#4ade80';
+      ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('VOICE POWER', gaugeX, gaugeY - 8);
+      ctx.fillText('ALTITUDE', 35, 45);
+      ctx.font = 'bold 36px monospace';
+      ctx.fillText(`${Math.round(rocketHeight)}m`, 35, 80);
 
-      // Gauge background
-      ctx.fillStyle = '#1c252e';
-      ctx.fillRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText('FUEL', 35, 105);
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(`${Math.round(rocketFuel * 100)}%`, 35, 130);
 
-      // Fuel fill with angular accent
-      const fuelWidth = gaugeWidth * rocketFuel;
-      ctx.fillStyle = '#ff4655';
-      ctx.fillRect(gaugeX, gaugeY, fuelWidth, gaugeHeight);
+      // Big progress bar on right
+      const barX = width - 270;
+      const barY = 30;
+      const barWidth = 40;
+      const barHeight = 500;
 
-      // Angular end cap
-      if (fuelWidth > 0) {
-        ctx.fillStyle = '#ff4655';
-        ctx.beginPath();
-        ctx.moveTo(gaugeX + fuelWidth, gaugeY);
-        ctx.lineTo(gaugeX + fuelWidth + 8, gaugeY + gaugeHeight / 2);
-        ctx.lineTo(gaugeX + fuelWidth, gaugeY + gaugeHeight);
-        ctx.fill();
-      }
+      // Bar background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
 
-      // Percentage text
-      ctx.fillStyle = '#ece8e1';
-      ctx.font = 'bold 14px "Arial Black", sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${Math.round(rocketFuel * 100)}%`, gaugeX + gaugeWidth + 35, gaugeY + gaugeHeight + 2);
+      // Fuel fill (bottom to top)
+      const fuelHeight = barHeight * rocketFuel;
+      const fuelY = barY + barHeight - fuelHeight;
 
-      // Status indicator - top left
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'left';
+      const fuelGradient = ctx.createLinearGradient(0, fuelY, 0, barY + barHeight);
+      fuelGradient.addColorStop(0, '#fbbf24');
+      fuelGradient.addColorStop(0.5, '#f59e0b');
+      fuelGradient.addColorStop(1, '#dc2626');
 
+      ctx.fillStyle = fuelGradient;
+      ctx.fillRect(barX, fuelY, barWidth, fuelHeight);
+
+      ctx.strokeStyle = '#cbd5e0';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+      // Status
       if (gameState === 'recording') {
-        const pulse = Math.sin(Date.now() / 300) * 0.5 + 0.5;
-        ctx.fillStyle = `rgba(255, 70, 85, ${0.6 + pulse * 0.4})`;
-        ctx.fillRect(25, 25, 3, 15);
-        ctx.fillStyle = '#ff4655';
-        ctx.fillText('RECORDING', 35, 36);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(width / 2 - 100, 30, 200, 50);
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('● RECORDING', width / 2, 60);
       } else if (gameState === 'analyzing') {
-        ctx.fillStyle = '#53a0d8';
-        ctx.fillRect(25, 25, 3, 15);
-        ctx.fillStyle = '#53a0d8';
-        ctx.fillText('ANALYZING', 35, 36);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(width / 2 - 100, 30, 200, 50);
+        ctx.fillStyle = '#ecc94b';
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('⟳ ANALYZING', width / 2, 60);
       }
 
-      animationFrameRef.current = requestAnimationFrame(animate);
+      animationRef.current = requestAnimationFrame(draw);
     };
 
-    animate();
+    draw();
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isRecording, audioLevel, rocketFuel, gameState, successAnim]);
+  }, [stars, clouds, planets, isRecording, audioLevel, rocketHeight, rocketFuel, gameState]);
 
   return (
     <div style={styles.container}>
-      {/* Valorant-style corner accents */}
-      <div style={styles.cornerTL}></div>
-      <div style={styles.cornerTR}></div>
-      <div style={styles.cornerBL}></div>
-      <div style={styles.cornerBR}></div>
-
-      {/* Header with tactical styling */}
       <div style={styles.header}>
-        <div style={styles.headerAccent}></div>
-        <h1 style={styles.title}>// VOICE TRAINING MODULE</h1>
-        <p style={styles.subtitle}>SMOOTH AIRFLOW PROTOCOL</p>
+        <h1 style={styles.title}>🚀 Space Flight Training</h1>
+        <p style={styles.subtitle}>Smooth Voice Control</p>
       </div>
 
-      {/* Main game area */}
-      <div style={styles.gameContainer}>
-        <canvas ref={canvasRef} width={900} height={600} style={styles.canvas} />
+      <canvas ref={canvasRef} width={1200} height={800} style={styles.canvas} />
 
-        {/* Live status overlay - Valorant style */}
-        {(isRecording || gameState === 'analyzing') && (
-          <div style={styles.liveOverlay}>
-            <div style={styles.liveBox}>
-              <div style={styles.liveHeader}>
-                <div style={styles.liveAccent}></div>
-                <span style={styles.pulse}>▐</span>
-                <span style={styles.liveStatus}>
-                  {gameState === 'recording' ? 'RECORDING' : 'ANALYZING'}
-                </span>
+      <div style={styles.controls}>
+        <div style={styles.promptBox}>
+          <p style={styles.prompt}>
+            🎤 Speak smoothly to launch your rocket! Try: "Ahhhh" or "Ready for liftoff"
+          </p>
+        </div>
+
+        {gameState === 'ready' && (
+          <button onClick={handleStart} style={styles.button}>
+            🎤 START MISSION
+          </button>
+        )}
+
+        {gameState === 'recording' && (
+          <div style={styles.statusBox}>
+            <p style={styles.status}>🔴 Recording... Speak now!</p>
+            <p style={styles.hint}>(Will auto-stop after 2.5s of silence)</p>
+          </div>
+        )}
+
+        {gameState === 'analyzing' && (
+          <div style={styles.statusBox}>
+            <p style={styles.status}>⏳ Analyzing your voice...</p>
+          </div>
+        )}
+
+        {gameState === 'result' && (
+          <div style={styles.results}>
+            <div style={styles.feedbackBox}>
+              <p style={styles.feedbackTitle}>🎯 Mission Status:</p>
+              <p style={styles.feedback}>{feedback}</p>
+            </div>
+
+            {transcript && (
+              <div style={styles.transcriptBox}>
+                <p style={styles.transcriptLabel}>📝 Transmission Received:</p>
+                <p style={styles.transcript}>"{transcript}"</p>
               </div>
-              <p style={styles.liveText}>{liveText}</p>
+            )}
 
-              {/* Live transcript display */}
-              {liveTranscript && gameState === 'recording' && (
-                <div style={styles.liveTranscriptBox}>
-                  <div style={styles.liveTranscriptLabel}>// LIVE INPUT</div>
-                  <div style={styles.liveTranscriptText}>
-                    {liveTranscript || '...'}
+            {features && (
+              <div style={styles.statsGrid}>
+                <div style={styles.statCard}>
+                  <p style={styles.statLabel}>Continuity</p>
+                  <p style={styles.statValue}>{(features.continuity * 100).toFixed(0)}%</p>
+                  <div style={styles.statBar}>
+                    <div style={{...styles.statBarFill, width: `${features.continuity * 100}%`}}></div>
                   </div>
                 </div>
-              )}
-            </div>
+                <div style={styles.statCard}>
+                  <p style={styles.statLabel}>Smooth Onset</p>
+                  <p style={styles.statValue}>{(features.onset_smoothness * 100).toFixed(0)}%</p>
+                  <div style={styles.statBar}>
+                    <div style={{...styles.statBarFill, width: `${features.onset_smoothness * 100}%`}}></div>
+                  </div>
+                </div>
+                <div style={styles.statCard}>
+                  <p style={styles.statLabel}>Stability</p>
+                  <p style={styles.statValue}>{(features.airflow_stability * 100).toFixed(0)}%</p>
+                  <div style={styles.statBar}>
+                    <div style={{...styles.statBarFill, width: `${features.airflow_stability * 100}%`}}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button onClick={handleNextRound} style={styles.button}>
+              🚀 NEXT LAUNCH
+            </button>
           </div>
         )}
       </div>
-
-      {/* Instruction panel */}
-      <div style={styles.promptBox}>
-        <div style={styles.promptAccent}></div>
-        <p style={styles.prompt}>// SMOOTH SPEECH TRAINING</p>
-        <p style={styles.promptOptions}>
-          Practice smooth, continuous speech. Try saying:<br/>
-          <span style={styles.promptExample}>"Hello everyone"</span> •
-          <span style={styles.promptExample}>"Good morning"</span> •
-          <span style={styles.promptExample}>"My name is..."</span><br/>
-          <span style={styles.promptTip}>Focus on steady airflow and gentle onset</span>
-        </p>
-      </div>
-
-      {/* Action button */}
-      {gameState === 'ready' && (
-        <>
-          <button
-            onClick={handleStart}
-            style={{
-              ...styles.button,
-              backgroundColor: buttonHovered ? '#ff4655' : '#fd4556',
-              transform: buttonHovered ? 'translateX(4px)' : 'translateX(0)',
-            }}
-            onMouseEnter={() => setButtonHovered(true)}
-            onMouseLeave={() => setButtonHovered(false)}
-          >
-            <div style={styles.buttonAccent}></div>
-            <span style={styles.buttonText}>INITIATE TRAINING</span>
-          </button>
-
-          {/* Debug: Test Backend Button */}
-          <button
-            onClick={testBackend}
-            style={{
-              ...styles.button,
-              marginTop: '0.5rem',
-              opacity: 0.7,
-              backgroundColor: '#53a0d8',
-            }}
-          >
-            <div style={styles.buttonAccent}></div>
-            <span style={styles.buttonText}>TEST BACKEND CONNECTION</span>
-          </button>
-        </>
-      )}
-
-      {/* Results panel - Valorant style */}
-      {gameState === 'result' && (
-        <div style={styles.resultContainer}>
-          {/* Feedback section */}
-          <div style={styles.feedbackBox}>
-            <div style={styles.feedbackAccent}></div>
-            <div style={styles.feedbackHeader}>
-              <span style={styles.feedbackIcon}>▶</span>
-              <span>ANALYSIS COMPLETE</span>
-            </div>
-            <p style={styles.feedback}>{feedback.toUpperCase()}</p>
-          </div>
-
-          {/* Transcript */}
-          {transcript && (
-            <div style={styles.transcriptBox}>
-              <div style={styles.transcriptAccent}></div>
-              <p style={styles.transcriptLabel}>// VOICE INPUT DETECTED</p>
-              <p style={styles.transcript}>"{transcript}"</p>
-            </div>
-          )}
-
-          {/* Stats grid - tactical style */}
-          {features && (
-            <div style={styles.statsGrid}>
-              <div style={styles.statCard}>
-                <div style={styles.statAccent}></div>
-                <div style={styles.statHeader}>CONTINUITY</div>
-                <div style={styles.statValue}>{(features.continuity * 100).toFixed(0)}</div>
-                <div style={styles.statBar}>
-                  <div style={{...styles.statBarFill, width: `${features.continuity * 100}%`}}></div>
-                </div>
-              </div>
-              <div style={styles.statCard}>
-                <div style={styles.statAccent}></div>
-                <div style={styles.statHeader}>ONSET</div>
-                <div style={styles.statValue}>{(features.onset_smoothness * 100).toFixed(0)}</div>
-                <div style={styles.statBar}>
-                  <div style={{...styles.statBarFill, width: `${features.onset_smoothness * 100}%`}}></div>
-                </div>
-              </div>
-              <div style={styles.statCard}>
-                <div style={styles.statAccent}></div>
-                <div style={styles.statHeader}>STABILITY</div>
-                <div style={styles.statValue}>{(features.airflow_stability * 100).toFixed(0)}</div>
-                <div style={styles.statBar}>
-                  <div style={{...styles.statBarFill, width: `${features.airflow_stability * 100}%`}}></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Next round button */}
-          <button
-            onClick={handleNextRound}
-            style={{
-              ...styles.button,
-              backgroundColor: buttonHovered ? '#ff4655' : '#fd4556',
-              transform: buttonHovered ? 'translateX(4px)' : 'translateX(0)',
-            }}
-            onMouseEnter={() => setButtonHovered(true)}
-            onMouseLeave={() => setButtonHovered(false)}
-          >
-            <div style={styles.buttonAccent}></div>
-            <span style={styles.buttonText}>CONTINUE TRAINING</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };
@@ -536,368 +491,155 @@ const styles = {
     alignItems: 'center',
     padding: '2rem',
     minHeight: '100vh',
-    background: '#0f1923',
-    fontFamily: '"Tungsten", "Druk Wide", "Industry", "Arial Black", sans-serif',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  // Corner accents - Valorant style
-  cornerTL: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '60px',
-    height: '60px',
-    borderTop: '3px solid #ff4655',
-    borderLeft: '3px solid #ff4655',
-    zIndex: 10,
-  },
-  cornerTR: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: '60px',
-    height: '60px',
-    borderTop: '3px solid #ff4655',
-    borderRight: '3px solid #ff4655',
-    zIndex: 10,
-  },
-  cornerBL: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    width: '60px',
-    height: '60px',
-    borderBottom: '3px solid #ff4655',
-    borderLeft: '3px solid #ff4655',
-    zIndex: 10,
-  },
-  cornerBR: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: '60px',
-    height: '60px',
-    borderBottom: '3px solid #ff4655',
-    borderRight: '3px solid #ff4655',
-    zIndex: 10,
+    background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   header: {
-    textAlign: 'left',
-    marginBottom: '2rem',
-    width: '100%',
-    maxWidth: '900px',
-    position: 'relative',
-  },
-  headerAccent: {
-    position: 'absolute',
-    left: -20,
-    top: 0,
-    width: '4px',
-    height: '100%',
-    background: '#ff4655',
+    textAlign: 'center',
+    marginBottom: '1.5rem',
   },
   title: {
-    fontSize: '2.5rem',
-    fontWeight: '700',
-    color: '#ece8e1',
-    marginBottom: '0.25rem',
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-    fontFamily: '"Tungsten", "Arial Black", sans-serif',
+    fontSize: '3rem',
+    fontWeight: 'bold',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    marginBottom: '0.5rem',
   },
   subtitle: {
-    color: '#ff4655',
-    fontSize: '0.9rem',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: '2px',
-    fontFamily: 'monospace',
-  },
-  gameContainer: {
-    position: 'relative',
-    marginBottom: '1.5rem',
+    color: '#94a3b8',
+    fontSize: '1.2rem',
   },
   canvas: {
-    border: '2px solid #1c252e',
-    background: '#000',
-    clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))',
+    border: '4px solid #1e293b',
+    borderRadius: '12px',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+    marginBottom: '2rem',
   },
-  // Live overlay - Valorant tactical style
-  liveOverlay: {
-    position: 'absolute',
-    top: '20px',
-    left: '20px',
-    zIndex: 10,
-  },
-  liveBox: {
-    background: 'rgba(15, 25, 35, 0.95)',
-    backdropFilter: 'blur(10px)',
-    padding: '1rem 1.5rem',
-    border: '2px solid #ff4655',
-    clipPath: 'polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 0 100%)',
-    minWidth: '280px',
-  },
-  liveHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    marginBottom: '0.5rem',
-  },
-  liveAccent: {
-    width: '3px',
-    height: '18px',
-    background: '#ff4655',
-  },
-  liveStatus: {
-    color: '#ff4655',
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
-    letterSpacing: '2px',
-    fontFamily: 'monospace',
-  },
-  pulse: {
-    animation: 'pulse 1s ease-in-out infinite',
-    fontSize: '1rem',
-    color: '#ff4655',
-    display: 'inline-block',
-  },
-  liveText: {
-    color: '#ece8e1',
-    fontSize: '0.9rem',
-    margin: 0,
-    fontWeight: '400',
-    fontFamily: 'monospace',
-  },
-  // Live transcript box
-  liveTranscriptBox: {
-    marginTop: '1rem',
-    padding: '0.75rem',
-    background: 'rgba(0, 0, 0, 0.4)',
-    border: '1px solid rgba(83, 160, 216, 0.3)',
-    borderLeft: '2px solid #53a0d8',
-  },
-  liveTranscriptLabel: {
-    color: '#53a0d8',
-    fontSize: '0.65rem',
-    fontWeight: 'bold',
-    letterSpacing: '1px',
-    marginBottom: '0.5rem',
-    fontFamily: 'monospace',
-  },
-  liveTranscriptText: {
-    color: '#ece8e1',
-    fontSize: '1rem',
-    fontWeight: '400',
-    lineHeight: '1.4',
-    minHeight: '1.5rem',
-    fontFamily: 'monospace',
-  },
-  // Instruction panel
-  promptBox: {
-    background: 'rgba(28, 37, 46, 0.6)',
-    padding: '1rem 2rem',
-    marginBottom: '1.5rem',
-    border: '1px solid #2a3a47',
-    borderLeft: '3px solid #ff4655',
-    maxWidth: '900px',
+  controls: {
     width: '100%',
-    position: 'relative',
+    maxWidth: '800px',
+    textAlign: 'center',
   },
-  promptAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: '3px',
-    height: '100%',
-    background: '#ff4655',
+  promptBox: {
+    background: 'rgba(15, 23, 42, 0.8)',
+    padding: '1.5rem',
+    borderRadius: '12px',
+    marginBottom: '1.5rem',
+    border: '2px solid #334155',
   },
   prompt: {
-    fontSize: '0.95rem',
-    color: '#ece8e1',
-    textAlign: 'left',
+    fontSize: '1.2rem',
+    color: '#e2e8f0',
     margin: 0,
-    marginBottom: '0.75rem',
-    fontWeight: '600',
-    fontFamily: 'monospace',
-    letterSpacing: '0.5px',
   },
-  promptOptions: {
-    fontSize: '0.85rem',
-    color: '#ece8e1',
-    textAlign: 'left',
-    margin: 0,
-    lineHeight: '1.6',
-    fontFamily: 'sans-serif',
-  },
-  promptExample: {
-    color: '#53a0d8',
-    fontWeight: '600',
-    padding: '0 0.5rem',
-    fontFamily: 'monospace',
-  },
-  promptTip: {
-    color: '#7a8a99',
-    fontSize: '0.75rem',
-    fontStyle: 'italic',
-    display: 'block',
-    marginTop: '0.5rem',
-  },
-  // Button - Valorant style
   button: {
-    padding: '1rem 2.5rem',
-    fontSize: '1.1rem',
-    fontWeight: '700',
-    background: '#fd4556',
+    padding: '1.25rem 3rem',
+    fontSize: '1.3rem',
+    fontWeight: 'bold',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     border: 'none',
-    color: '#0f1923',
+    borderRadius: '12px',
+    color: '#fff',
     cursor: 'pointer',
-    marginTop: '1rem',
-    transition: 'all 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    letterSpacing: '1px',
-    textTransform: 'uppercase',
-    position: 'relative',
-    clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)',
+    boxShadow: '0 10px 25px rgba(102, 126, 234, 0.5)',
+    transition: 'transform 0.2s',
   },
-  buttonAccent: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: '12px',
-    height: '12px',
-    background: '#ff1744',
-    clipPath: 'polygon(100% 0, 100% 100%, 0 0)',
+  statusBox: {
+    background: 'rgba(15, 23, 42, 0.8)',
+    padding: '2rem',
+    borderRadius: '12px',
+    border: '2px solid #334155',
   },
-  buttonText: {
-    fontFamily: '"Arial Black", sans-serif',
+  status: {
+    fontSize: '1.5rem',
+    color: '#4ade80',
+    margin: '0 0 0.5rem 0',
+    fontWeight: 'bold',
   },
-  // Results
-  resultContainer: {
-    width: '100%',
-    maxWidth: '900px',
-    marginTop: '1.5rem',
-    animation: 'slideIn 0.3s ease-out',
+  hint: {
+    fontSize: '1rem',
+    color: '#94a3b8',
+    margin: 0,
+  },
+  results: {
+    animation: 'fadeIn 0.5s',
   },
   feedbackBox: {
-    background: 'rgba(28, 37, 46, 0.8)',
-    padding: '1.5rem 2rem',
+    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
+    padding: '2rem',
+    borderRadius: '12px',
     marginBottom: '1.5rem',
-    border: '2px solid #ff4655',
-    position: 'relative',
-    clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))',
+    border: '2px solid #667eea',
   },
-  feedbackAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: '4px',
-    height: '100%',
-    background: '#ff4655',
-  },
-  feedbackHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    color: '#ff4655',
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
+  feedbackTitle: {
+    fontSize: '1rem',
+    color: '#94a3b8',
+    margin: '0 0 0.5rem 0',
+    textTransform: 'uppercase',
     letterSpacing: '2px',
-    marginBottom: '0.75rem',
-    fontFamily: 'monospace',
-  },
-  feedbackIcon: {
-    fontSize: '0.7rem',
   },
   feedback: {
-    fontSize: '1.5rem',
-    color: '#ece8e1',
-    fontWeight: '700',
+    fontSize: '2rem',
+    color: '#fff',
     margin: 0,
-    letterSpacing: '1px',
+    fontWeight: 'bold',
   },
-  // Transcript
   transcriptBox: {
-    background: 'rgba(28, 37, 46, 0.6)',
-    padding: '1.25rem 1.5rem',
+    background: 'rgba(15, 23, 42, 0.8)',
+    padding: '1.5rem',
+    borderRadius: '12px',
     marginBottom: '1.5rem',
-    border: '1px solid #2a3a47',
-    borderLeft: '3px solid #53a0d8',
-    position: 'relative',
-  },
-  transcriptAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: '3px',
-    height: '100%',
-    background: '#53a0d8',
+    border: '2px solid #4ade80',
   },
   transcriptLabel: {
-    color: '#53a0d8',
-    fontSize: '0.75rem',
-    marginBottom: '0.5rem',
-    fontWeight: '600',
+    fontSize: '0.9rem',
+    color: '#4ade80',
+    margin: '0 0 0.5rem 0',
     textTransform: 'uppercase',
     letterSpacing: '1px',
-    fontFamily: 'monospace',
   },
   transcript: {
-    color: '#ece8e1',
-    fontSize: '1.1rem',
+    fontSize: '1.5rem',
+    color: '#e2e8f0',
     margin: 0,
-    fontWeight: '400',
+    fontStyle: 'italic',
   },
-  // Stats grid
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '1rem',
-    marginBottom: '1.5rem',
+    marginBottom: '2rem',
   },
   statCard: {
-    background: 'rgba(28, 37, 46, 0.8)',
-    padding: '1.25rem 1rem',
-    border: '1px solid #2a3a47',
-    position: 'relative',
-    clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
+    background: 'rgba(15, 23, 42, 0.8)',
+    padding: '1.5rem',
+    borderRadius: '12px',
+    border: '2px solid #334155',
   },
-  statAccent: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: '10px',
-    height: '10px',
-    background: '#ff4655',
-    clipPath: 'polygon(100% 0, 100% 100%, 0 0)',
-  },
-  statHeader: {
-    color: '#7a8a99',
-    fontSize: '0.75rem',
-    fontWeight: '700',
+  statLabel: {
+    fontSize: '0.9rem',
+    color: '#94a3b8',
+    margin: '0 0 0.5rem 0',
     textTransform: 'uppercase',
     letterSpacing: '1px',
-    marginBottom: '0.5rem',
-    fontFamily: 'monospace',
   },
   statValue: {
     fontSize: '2.5rem',
-    fontWeight: '700',
-    color: '#ece8e1',
-    marginBottom: '0.5rem',
-    fontFamily: '"Arial Black", sans-serif',
+    color: '#667eea',
+    margin: '0 0 0.5rem 0',
+    fontWeight: 'bold',
   },
   statBar: {
     width: '100%',
-    height: '4px',
-    background: '#1c252e',
-    position: 'relative',
+    height: '8px',
+    background: '#1e293b',
+    borderRadius: '4px',
+    overflow: 'hidden',
   },
   statBarFill: {
     height: '100%',
-    background: '#ff4655',
+    background: 'linear-gradient(90deg, #667eea, #764ba2)',
     transition: 'width 0.5s ease',
   },
 };
